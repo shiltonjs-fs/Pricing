@@ -1,0 +1,53 @@
+--profitability
+with
+    MAIN as (
+        select
+            case
+                when CARDUP_PAYMENT_USD_AMT < 50000 then '01. 0-50k'
+                when CARDUP_PAYMENT_USD_AMT < 100000 then '02. 50-100k'
+                when CARDUP_PAYMENT_USD_AMT < 150000 then '03. 100-150k'
+                when CARDUP_PAYMENT_USD_AMT < 200000 then '04. 150-200k'
+                else '05. 200k+'
+            end as USD_AMT_BAND,
+            case
+                when CARDUP_PAYMENT_NEXT_DAY_FEE > 0 then 'Next Day'
+                else 'Standard'
+            end as NEXT_DAY,
+            CARDUP_PAYMENT_CARD_TYPE as CARD_TYPE,
+            case when CARDUP_PAYMENT_PROMO_CODE is not null then 'Promo Code' else 'No Promo Code' end as PROMO_CODE,
+            CARDUP_PAYMENT_CUSTOMER_COMPANY_ID,
+            DWH_CARDUP_PAYMENT_ID,
+            CU_COMPANY_L1_INDUSTRY as INDUSTRY,
+            CARDUP_PAYMENT_NET_REVENUE_USD_AMT / CARDUP_PAYMENT_USD_AMT as TAKE_RATE,
+            CARDUP_PAYMENT_TOTAL_REVENUE_USD_AMT / CARDUP_PAYMENT_USD_AMT as CU_FEE,
+            CARDUP_PAYMENT_TOTAL_COST_USD_AMT / CARDUP_PAYMENT_USD_AMT as PROC_COST,
+            CARDUP_PAYMENT_NET_REVENUE_USD_AMT as NET_REVENUE,
+            CARDUP_PAYMENT_USD_AMT as GTV
+        from
+            ADM.TRANSACTION.CARDUP_PAYMENT_DENORM_T T1
+            join CDM.COUNTERPARTY.CARDUP_COMPANY_T T2 on T1.CARDUP_PAYMENT_CUSTOMER_COMPANY_ID = T2.CU_COMPANY_ID
+        WHERE
+            CARDUP_PAYMENT_STATUS NOT IN ('Payment Failed', 'Cancelled', 'Refunded', 'Refunding')
+            AND CARDUP_PAYMENT_USER_TYPE IN ('business')
+            and LOWER(CARDUP_PAYMENT_PRODUCT_NAME) LIKE '%make%'
+            and DATE(DATE_TRUNC('month', CARDUP_PAYMENT_CREATED_AT_LCL_TS)) >= DATE('2024-05-01')
+            and CARDUP_PAYMENT_CU_LOCALE_ID = 1
+            and CARDUP_PAYMENT_CARD_TYPE in ('Visa', 'Mastercard')
+            and CU_COMPANY_L1_INDUSTRY is not null
+    )
+select
+    INDUSTRY,
+    AVG(TAKE_RATE) as AVG_TAKE_RATE,
+    APPROX_PERCENTILE(TAKE_RATE, 0.5) as Q2_TAKE_RATE,
+    AVG(CU_FEE) as AVG_CU_FEE,
+    APPROX_PERCENTILE(CU_FEE, 0.5) as Q2_CU_FEE,
+    AVG(PROC_COST) as AVG_PROC_COST,
+    APPROX_PERCENTILE(PROC_COST, 0.5) as Q2_PROC_COST,
+    COUNT(distinct CARDUP_PAYMENT_CUSTOMER_COMPANY_ID) as TOTAL_COMPANIES,
+    COUNT(distinct DWH_CARDUP_PAYMENT_ID) as TOTAL_TX_COUNT,
+    AVG(GTV) as AVG_GTV,
+    AVG(NET_REVENUE) as AVG_NET_REVENUE,
+from
+    MAIN
+group by
+    1;

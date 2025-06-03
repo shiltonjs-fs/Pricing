@@ -1,0 +1,1 @@
+select t2.entity_name, t1.company_id from cbm.cardup_db_reporting.company_data t1 join dev.sbox_adithya.sg_gov_acra t2 on t1.uen = t2.uen;

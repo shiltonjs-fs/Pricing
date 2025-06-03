@@ -1,0 +1,14 @@
+select
+    *
+from
+    ADM.TRANSACTION.CARDUP_PAYMENT_DENORM_T
+WHERE
+    true 
+    and CARDUP_PAYMENT_STATUS NOT IN ('Payment Failed', 'Cancelled', 'Refunded', 'Refunding', 'Scheduled')
+    --AND CARDUP_PAYMENT_USER_TYPE = 'business'
+    AND CARDUP_PAYMENT_CU_LOCALE_ID = 1
+    AND LOWER(CARDUP_PAYMENT_PRODUCT_NAME) LIKE '%make%'
+    and DATE(DATE_TRUNC('month', date(CARDUP_PAYMENT_SUCCESS_AT_UTC_TS))) >= DATE('2024-01-01')
+    and DATE(DATE_TRUNC('month', date(CARDUP_PAYMENT_SUCCESS_AT_UTC_TS))) <= DATE('2025-03-01')
+    and CARDUP_PAYMENT_CUSTOMER_COMPANY_ID in (
+        '2235');
