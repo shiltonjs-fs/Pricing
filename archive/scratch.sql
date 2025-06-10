@@ -874,4 +874,6 @@ select cu_company_id, cu_company_l1_industry from cdm.counterparty.cardup_compan
 
 select * from ADM.TRANSACTION.CARDUP_PAYMENT_DENORM_T where CARDUP_PAYMENT_PROMO_CODE_TAG = 'Special Pricing' and cardup_payment_promo_code is null limit 10;
 
-select * from ADM.TRANSACTION.CARDUP_PAYMENT_DENORM_T where cardup_payment_customer_company_id=2779;
+select * from ADM.TRANSACTION.CARDUP_PAYMENT_DENORM_T limit 10;
+
+select * from CDM.COUNTERPARTY.CARDUP_COMPANY_T limit 10;

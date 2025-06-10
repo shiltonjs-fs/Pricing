@@ -1,0 +1,68 @@
+WITH
+    MAIN AS (
+        SELECT
+            CU_COMPANY_UEN UEN,
+            CARDUP_PAYMENT_CUSTOMER_COMPANY_ID,
+            DWH_CARDUP_PAYMENT_ID,
+            CARDUP_PAYMENT_NET_REVENUE_USD_AMT / CARDUP_PAYMENT_USD_AMT AS TAKE_RATE,
+            CARDUP_PAYMENT_TOTAL_REVENUE_USD_AMT / CARDUP_PAYMENT_USD_AMT AS CU_FEE,
+            CARDUP_PAYMENT_TOTAL_COST_USD_AMT / CARDUP_PAYMENT_USD_AMT AS PROC_COST,
+            CARDUP_PAYMENT_NET_REVENUE_USD_AMT AS NET_REVENUE,
+            CARDUP_PAYMENT_USD_AMT AS GTV,
+            CARDUP_PAYMENT_CREATED_AT_LCL_TS,
+            MIN(CARDUP_PAYMENT_CREATED_AT_LCL_TS) OVER (
+                PARTITION BY
+                    CU_COMPANY_UEN
+            ) AS FIRST_TX_TS,
+            MAX(CARDUP_PAYMENT_CREATED_AT_LCL_TS) OVER (
+                PARTITION BY
+                    CU_COMPANY_UEN
+            ) AS LAST_TX_TS
+        FROM
+            ADM.TRANSACTION.CARDUP_PAYMENT_DENORM_T T1
+            JOIN CDM.COUNTERPARTY.CARDUP_COMPANY_T T2 ON T1.CARDUP_PAYMENT_CUSTOMER_COMPANY_ID = T2.CU_COMPANY_ID
+        WHERE
+            CARDUP_PAYMENT_STATUS NOT IN ('Payment Failed', 'Cancelled', 'Refunded', 'Refunding')
+            AND CARDUP_PAYMENT_USER_TYPE IN ('business')
+            AND LOWER(CARDUP_PAYMENT_PRODUCT_NAME) LIKE '%make%'
+            AND CARDUP_PAYMENT_CU_LOCALE_ID = 1
+            AND CARDUP_PAYMENT_CARD_TYPE IN ('Visa', 'Mastercard')
+            AND CU_COMPANY_L1_INDUSTRY IS NOT NULL
+    ),
+    COLLECT as (
+        select
+            CARDUP_PAYMENT_CUSTOMER_COMPANY_ID,
+            MAX(
+                case
+                    when LOWER(CARDUP_PAYMENT_PRODUCT_NAME) LIKE '%collect%' then 1
+                    else 0
+                end
+            ) as USED_COLLECT,
+            MAX(
+                case
+                    when LOWER(CARDUP_PAYMENT_SCHEDULE_TYPE) LIKE '%recur%' then 1
+                    else 0
+                end
+            ) as USED_RECURRING,
+            COUNT(distinct CARDUP_PAYMENT_PAYMENT_TYPE) COUNT_PAYTYPE,
+        from
+            ADM.TRANSACTION.CARDUP_PAYMENT_DENORM_T T1
+        group by
+            1
+    )
+SELECT
+    UEN,
+    AVG(TAKE_RATE) AS AVG_TAKE_RATE,
+    AVG(CU_FEE) AS AVG_CU_FEE,
+    AVG(NET_REVENUE) AS AVG_NET_REVENUE,
+    AVG(GTV) AS AVG_GTV,
+    COUNT(DISTINCT DWH_CARDUP_PAYMENT_ID) AS TOTAL_TX_COUNT,
+    DATEDIFF(MONTH, MIN(FIRST_TX_TS), MAX(LAST_TX_TS)) AS TENURE_IN_MONTHS,
+    MAX(USED_COLLECT) AS USED_COLLECT,
+    MAX(USED_RECURRING) AS USED_RECURRING,
+    MAX(COUNT_PAYTYPE) AS PAYTYPE_COUNT
+FROM
+    MAIN T1
+    join COLLECT T2 using (CARDUP_PAYMENT_CUSTOMER_COMPANY_ID)
+GROUP BY
+    UEN;
